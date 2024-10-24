@@ -9,50 +9,32 @@ import (
 	"time"
 )
 
-type Expense struct {
-	ID          int
-	Amount      float64
-	Category    string
-	Description string
-	Date        time.Time
-}
-
-var expenses []Expense
-var nextID = 1
-
 func main() {
-	fmt.Println("=== Personal Expense Tracker ===")
-	
-	// Load existing data
-	loadExpenses()
-	
+	expenseTracker := NewExpenseTracker()
+	scanner := bufio.NewScanner(os.Stdin)
+
 	for {
-		fmt.Println("\nMenu:")
+		fmt.Println("\n=== Personal Expense Tracker ===")
 		fmt.Println("1. Add Expense")
 		fmt.Println("2. View All Expenses")
-		fmt.Println("3. View Expenses by Category")
-		fmt.Println("4. Show Summary")
-		fmt.Println("5. Show Data Visualization")
-		fmt.Println("6. Exit")
+		fmt.Println("3. View Category Summary")
+		fmt.Println("4. Generate Visualization")
+		fmt.Println("5. Exit")
 		fmt.Print("Choose an option: ")
-		
-		reader := bufio.NewReader(os.Stdin)
-		input, _ := reader.ReadString('\n')
-		input = strings.TrimSpace(input)
-		
-		switch input {
+
+		scanner.Scan()
+		choice := scanner.Text()
+
+		switch choice {
 		case "1":
-			addExpense()
+			addExpense(expenseTracker, scanner)
 		case "2":
-			viewAllExpenses()
+			viewAllExpenses(expenseTracker)
 		case "3":
-			viewByCategory()
+			viewCategorySummary(expenseTracker)
 		case "4":
-			showSummary()
+			generateVisualization(expenseTracker)
 		case "5":
-			showVisualization()
-		case "6":
-			saveExpenses()
 			fmt.Println("Goodbye!")
 			return
 		default:
@@ -61,160 +43,82 @@ func main() {
 	}
 }
 
-func addExpense() {
-	reader := bufio.NewReader(os.Stdin)
-	
+func addExpense(et *ExpenseTracker, scanner *bufio.Scanner) {
+	fmt.Print("Enter expense description: ")
+	scanner.Scan()
+	description := scanner.Text()
+
 	fmt.Print("Enter amount: ")
-	amountStr, _ := reader.ReadString('\n')
-	amount, err := strconv.ParseFloat(strings.TrimSpace(amountStr), 64)
+	scanner.Scan()
+	amountStr := scanner.Text()
+	amount, err := strconv.ParseFloat(amountStr, 64)
 	if err != nil {
-		fmt.Println("Invalid amount!")
+		fmt.Println("Invalid amount. Please enter a valid number.")
 		return
 	}
-	
-	fmt.Print("Enter category: ")
-	category, _ := reader.ReadString('\n')
-	category = strings.TrimSpace(category)
-	
-	fmt.Print("Enter description: ")
-	description, _ := reader.ReadString('\n')
-	description = strings.TrimSpace(description)
-	
-	expense := Expense{
-		ID:          nextID,
-		Amount:      amount,
-		Category:    category,
-		Description: description,
-		Date:        time.Now(),
-	}
-	
-	expenses = append(expenses, expense)
-	nextID++
-	fmt.Printf("Expense added successfully! (ID: %d)\n", expense.ID)
+
+	fmt.Print("Enter category (Food, Transport, Entertainment, Bills, Other): ")
+	scanner.Scan()
+	category := scanner.Text()
+
+	et.AddExpense(description, amount, category)
+	fmt.Printf("Expense added successfully!\n")
 }
 
-func viewAllExpenses() {
+func viewAllExpenses(et *ExpenseTracker) {
+	expenses := et.GetAllExpenses()
 	if len(expenses) == 0 {
-		fmt.Println("No expenses recorded.")
+		fmt.Println("No expenses recorded yet.")
 		return
 	}
-	
-	fmt.Printf("\n%-5s %-10s %-15s %-20s %-12s\n", "ID", "Amount", "Category", "Description", "Date")
-	fmt.Println(strings.Repeat("-", 70))
-	
+
+	fmt.Println("\n=== All Expenses ===")
 	total := 0.0
-	for _, expense := range expenses {
-		fmt.Printf("%-5d $%-9.2f %-15s %-20s %-12s\n", 
-			expense.ID, expense.Amount, expense.Category, 
-			expense.Description, expense.Date.Format("2006-01-02"))
+	for i, expense := range expenses {
+		fmt.Printf("%d. %s - $%.2f (%s) - %s\n", 
+			i+1, expense.Description, expense.Amount, 
+			expense.Category, expense.Date.Format("2006-01-02"))
 		total += expense.Amount
 	}
-	
 	fmt.Printf("\nTotal: $%.2f\n", total)
 }
 
-func viewByCategory() {
-	if len(expenses) == 0 {
-		fmt.Println("No expenses recorded.")
+func viewCategorySummary(et *ExpenseTracker) {
+	summary := et.GetCategorySummary()
+	if len(summary) == 0 {
+		fmt.Println("No expenses recorded yet.")
 		return
 	}
-	
-	categoryMap := make(map[string][]Expense)
-	for _, expense := range expenses {
-		categoryMap[expense.Category] = append(categoryMap[expense.Category], expense)
-	}
-	
-	fmt.Println("\nExpenses by Category:")
-	for category, categoryExpenses := range categoryMap {
-		total := 0.0
-		for _, expense := range categoryExpenses {
-			total += expense.Amount
-		}
-		fmt.Printf("- %s: $%.2f (%d expenses)\n", category, total, len(categoryExpenses))
-	}
-}
 
-func showSummary() {
-	if len(expenses) == 0 {
-		fmt.Println("No expenses recorded.")
-		return
-	}
-	
+	fmt.Println("\n=== Category Summary ===")
 	total := 0.0
-	categoryTotals := make(map[string]float64)
-	
-	for _, expense := range expenses {
-		total += expense.Amount
-		categoryTotals[expense.Category] += expense.Amount
+	for category, amount := range summary {
+		fmt.Printf("%s: $%.2f\n", category, amount)
+		total += amount
 	}
-	
-	fmt.Printf("\n=== Expense Summary ===\n")
-	fmt.Printf("Total Expenses: $%.2f\n", total)
-	fmt.Printf("Number of Expenses: %d\n", len(expenses))
-	fmt.Printf("Average per Expense: $%.2f\n", total/float64(len(expenses)))
-	
-	fmt.Println("\nBy Category:")
-	for category, amount := range categoryTotals {
-		percentage := (amount / total) * 100
-		fmt.Printf("- %s: $%.2f (%.1f%%)\n", category, amount, percentage)
-	}
+	fmt.Printf("Total: $%.2f\n", total)
 }
 
-func showVisualization() {
-	if len(expenses) == 0 {
-		fmt.Println("No expenses recorded.")
+func generateVisualization(et *ExpenseTracker) {
+	fmt.Println("\n=== Expense Visualization ===")
+	summary := et.GetCategorySummary()
+	
+	if len(summary) == 0 {
+		fmt.Println("No expenses to visualize.")
 		return
 	}
-	
-	categoryTotals := make(map[string]float64)
+
+	// Simple text-based visualization
 	total := 0.0
-	
-	for _, expense := range expenses {
-		categoryTotals[expense.Category] += expense.Amount
-		total += expense.Amount
+	for _, amount := range summary {
+		total += amount
 	}
-	
-	fmt.Println("\n=== Data Visualization ===")
-	fmt.Println("Expense Distribution by Category:")
-	
-	for category, amount := range categoryTotals {
+
+	for category, amount := range summary {
 		percentage := (amount / total) * 100
-		bars := int(percentage / 2) // Each bar represents 2%
-		fmt.Printf("%-15s: %s %.1f%% ($%.2f)\n", 
-			category, 
-			strings.Repeat("█", bars), 
-			percentage, 
-			amount)
-	}
-	
-	// Monthly trend visualization
-	fmt.Println("\nMonthly Spending Trend:")
-	monthlyTotals := make(map[string]float64)
-	for _, expense := range expenses {
-		monthYear := expense.Date.Format("2006-01")
-		monthlyTotals[monthYear] += expense.Amount
-	}
-	
-	for month, amount := range monthlyTotals {
-		fmt.Printf("%s: $%.2f\n", month, amount)
-	}
-}
-
-func saveExpenses() {
-	// In a real application, you'd save to a file or database
-	// For this demo, we'll just print a message
-	fmt.Println("Expenses saved (in memory only for this demo)")
-}
-
-func loadExpenses() {
-	// In a real application, you'd load from a file or database
-	// For this demo, we'll add some sample data
-	if len(expenses) == 0 {
-		expenses = []Expense{
-			{ID: 1, Amount: 45.50, Category: "Food", Description: "Groceries", Date: time.Now().AddDate(0, 0, -5)},
-			{ID: 2, Amount: 25.00, Category: "Transport", Description: "Bus pass", Date: time.Now().AddDate(0, 0, -3)},
-			{ID: 3, Amount: 80.00, Category: "Entertainment", Description: "Movie tickets", Date: time.Now().AddDate(0, 0, -1)},
-		}
-		nextID = 4
+		bars := int(percentage / 5) // Each bar represents 5%
+		bar := strings.Repeat("█", bars)
+		fmt.Printf("%-15s: %-20s %.1f%% ($%.2f)\n", 
+			category, bar, percentage, amount)
 	}
 }
